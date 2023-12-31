@@ -1,5 +1,5 @@
 // middleware/isManager.js
-const mysql = require('mysql/promise');
+const mysql = require('mysql2/promise');
 const { pool } = require('../db'); // Adjust to your database setup
 // middleware function check if the user is a manager 
 async function isManager(req, res, next) {
@@ -25,4 +25,7 @@ async function isManager(req, res, next) {
   }
 }
 
-module.exports = isManager;
+module.exports = {
+  isManager,
+  
+};
