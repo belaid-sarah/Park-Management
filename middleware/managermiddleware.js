@@ -1,6 +1,6 @@
 // middleware/isManager.js
 const mysql = require('mysql2/promise');
-const { pool } = require('../db'); // Adjust to your database setup
+const { pool } = require('../models/db'); // Adjust to your database setup
 // middleware function check if the user is a manager 
 async function isManager(req, res, next) {
   const userId = req.user.id; 

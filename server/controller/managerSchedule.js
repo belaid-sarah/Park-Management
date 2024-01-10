@@ -33,7 +33,7 @@ exports.create = (req , res) =>{
 
     // User the connection
     connection.query(
-        'INSERT INTO team SET team_name = ? , descrpition = ? , end_event_date = ? , start_event_date = ?' 
+        'INSERT INTO team SET team_name = ? , descrpition = ? , end_event_date = ? , start_event_date = ?', 
          [event_name , descrpition , end_event_date , start_event_date],
           (err,rows)=>{
         if (!err){

@@ -1,11 +1,12 @@
 const mysql = require('mysql');
+const { pool } = require('../../models/db');
 
 require('dotenv').config();
 
 
 //connection pool
 
-let connection = mysql.createConnection({
+let connection = mysql.createPool({
     host: process.env.DB_HOST ,
     user : process.env.DB_USER,
     password: process.env.DB_PASS,
@@ -14,26 +15,27 @@ let connection = mysql.createConnection({
 
 // connect to database
 
-connection.connect((err) =>{
+pool.getConnection((err, connection) =>{
 if (err){
     console.error('Erroro connecting to my sql:' +err.stack)
     return;
 }
 console.log('Connected to my sql as id' + connection.threadId)
 
+connection.release();
 });
 
 //////////////////////////////////////////////////////
 // add new game 
-exports.create = (req , res) =>{
+exports.createGame = (req , res) =>{
   const { name , descrpition , id_zone } =
   req.body;
   let searchTerm = req.body.search;
 
   //  the connection
   connection.query(
-      'INSERT INTO game SET name = ? , descrpition = ? , id_zone = ?' 
-       [name  , descrpition, id_zone , picture_game],
+      'INSERT INTO game SET name = ? , descrpition = ? , id_zone = ?',
+       [name  , descrpition , picture_game],
         (err,rows)=>{
       if (!err){
           res.render('add-game', {alert: 'game added seccessfully.'});
@@ -46,7 +48,7 @@ exports.create = (req , res) =>{
 
 
  // delete game 
-exports.delete = (req , res) => {
+exports.deleteGame = (req , res) => {
 // user connection
 connection.query('DELETE FROM game WHERE id_game = ?' , [req.params.id], (err, result)=>{
   if(!err){
@@ -67,49 +69,26 @@ exports.view = (req, res) =>
         //when done with the connection , release it
         if (!err){
             let removedUser = req.query.removed;
-            res.render('home', {rows,removedUser});
+            res.render('view', {rows,removedUser});
         } else {
             console.log(err);
         }
         console.log('The data from staff table: \n', rows);
         });
+        
+        
     }
 
-// find staff by search
-// this exports a function that will be uses when this module is required in another file.
-exports.find = (req, res) => {
-    // extract the search term from the request body
-    let searchTerm = req.body.search;
-    // User connection
-    // execute a sql query to select rows from the 'user' table where the first_name or last name is like the search term
-    connection.query('SELECT * FROM staff WHERE first_name Like ? OR last_name LIKE ?' , ['%' + searchTerm + '%' , '%' + searchTerm + '%' ] , (err, rows) =>{
-        //check if there is no error in executing the query.
-        if (!err) {
-            //render the 'home' views (assuming this is a template engine like ejs) and pass the retrieved rows.
-            res.render('home' , {rows});
-            }else {
-                // log the error to the console if there is an error .
-                console.log(err);
-        }
-
-        // log the data from the 'user' table to the console.
-        console.log('the data from user table : \n' , rows);
-    });
-    // this exports another function that will be used when this module is required in another file
-    exports.form = (req, res)=>{
-        res.render('add-staff');
-    }
-}
 
 // add new staff 
-   exports.create = (req , res) =>{
+   exports.createStaff = (req , res) =>{
     const { first_name , last_name , email , phone , comments } =
     req.body;
     let searchTerm = req.body.search;
 
     // User the connection
     connection.query(
-        'INSERT INTO user SET first_name = ? ,last_name = ? , email = ?, phone = ?, comments= ?' 
+        'INSERT INTO user SET first_name = ? ,last_name = ? , email = ?, phone = ?, comments= ?' ,
          [first_name , last_name , email, phone , comments],
           (err,rows)=>{
         if (!err){
@@ -119,6 +98,7 @@ exports.find = (req, res) => {
         }
         console.log('the data from staff table : \n' , rows);
     });
+    res.send('Create staff route works!');
    } 
 
    // Edit staff
@@ -140,8 +120,9 @@ exports.find = (req, res) => {
    exports.update = (req, res) =>{
     const { first_name , last_name , email , phone , comments } = req.body;
     // user the connection 
-    connection.query('UPDATE user SET first_name = ?, last_name = ?, email = ?, phone = ?, comments = ? WHERE id = ?', 
-    [first_name, last_name, email, phone, comments, req.params.id], (err, rows) =>
+    connection.query('UPDATE staff SET first_name = ?, last_name = ?, email = ?, phone = ?, comments = ? WHERE id = ?', 
+    [first_name, last_name, email, phone, comments],
+     (err, rows) =>
     { 
         if (!err){
             // user the connection
@@ -167,32 +148,17 @@ exports.find = (req, res) => {
 
 
 // delete staff 
-exports.delete = (req , res) => {
+exports.deleteStaff = (req , res) => {
 // user connection
 connection.query('DELETE FROM user WHERE id = ?' , [req.params.id], (err, result)=>{
     if(!err){
-        console.log('staff with id ${req.params.id} deleted seccessfully');
+        console.log(`staff with id ${req.params.id} deleted seccessfully`);
         res.redirect('/');
         }else{
             console.error('Error deleting staff:' , err);
     }
 });
 }
-// Hide a record 
-app.post('/updatestaff/:id', (req,res)=>{
-
-
-connection.query('UPDATE staff SET status =? WHERE id =?',
-['removed', req.params.id] , (err,rows)=> {
-    if(!err){
-        let removedstaff = encodeURIComponent('staff seccessufully removed');
-        res.redirect('/?removed=' + removedUser);
-        } else {
-            console.log(err);
-        }
-        console.log('the data from beer table are : \n' , rows);
-        });
-    });
 
 // View Users
 exports.viewall = (req, res) => {
@@ -216,15 +182,15 @@ exports.viewall = (req, res) => {
 ///////////////////////////////////////////////////////////////////////
 
 // add new stand  
-exports.create = (req , res) =>{
-    const { stand_name , descrpition , stand_type , stand_zone , id_stand } =
+exports.createStand = (req , res) =>{
+    const { stand_name , descrpition , stand_type , stand_zone} =
     req.body;
     let searchTerm = req.body.search;
 
     //  the connection
     connection.query(
-        'INSERT INTO stand SET stand_name = ? , descrpition = ? , id_stand = ? , stand_zone = ? , stand_type = ?'  
-         [stand_name  , descrpition, id_stand , stand_zone , stand_type],
+        'INSERT INTO stand SET stand_name = ? , descrpition = ? , id_stand = ? , stand_zone = ? , stand_type = ?' ,
+         [stand_name  , descrpition, stand_zone , stand_type],
           (err,rows)=>{
         if (!err){
             res.render('add-stand', {alert: 'stand added seccessfully.'});
@@ -236,7 +202,7 @@ exports.create = (req , res) =>{
    } 
 
   // delete stand 
-  exports.delete = (req , res) => {
+  exports.deleteStand = (req , res) => {
     // user connection
     connection.query('DELETE FROM team WHERE id = ?' , [req.params.id], (err, result)=>{
         if(!err){
@@ -252,14 +218,14 @@ exports.create = (req , res) =>{
 
 
 // add new team  
-exports.create = (req , res) =>{
+exports.createTeam = (req , res) =>{
   const { team_name , descrpition , id_task , id_staff } =
   req.body;
   let searchTerm = req.body.search;
 
   // User the connection
   connection.query(
-      'INSERT INTO team SET team_name = ? , descrpition = ? , id_staff = ?' 
+      'INSERT INTO team SET team_name = ? , descrpition = ? , id_staff = ?',
        [team_name  , descrpition, id_staff , id_task],
         (err,rows)=>{
       if (!err){
@@ -272,7 +238,7 @@ exports.create = (req , res) =>{
  } 
 
 // delete team 
-exports.delete = (req , res) => {
+exports.deleteTeam = (req , res) => {
   // user connection
   connection.query('DELETE FROM team WHERE id = ?' , [req.params.id], (err, result)=>{
       if(!err){
@@ -308,15 +274,15 @@ exports.delete = (req , res) => {
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 // add new zone 
-exports.create = (req , res) =>{
-    const  { zone_name  ,id_zone } =
+exports.createZone = (req , res) =>{
+    const  { zone_name} =
     req.body;
     let searchTerm = req.body.search;
 
     // User the connection
     connection.query(
-        'INSERT INTO user SET  id_zone = ?,  zone_name= ?' 
-         [ zone_name  ,id_zone ],
+        'INSERT INTO user SET  id_zone = ?,  zone_name= ?' ,
+         [ zone_name ],
           (err,rows)=>{
         if (!err){
             res.render('add-zone', {alert: 'zone added seccessfully.'});
@@ -344,11 +310,13 @@ exports.edit = (req , res) =>{
 
 
    //update zone 
-   exports.update = (req, res) =>{
-    const { zone_name  ,id_zone }= req.body;
+   exports.updateZone = (req, res) =>{
+    const { zone_name  }= req.body;
     // user the connection 
-    connection.query('UPDATE zone SET id_zone = ?, zone_name = ? WHERE id_zone = ?', 
-    [ zone_name  ,id_zone, req.params.id], (err, rows) =>
+    connection.query(
+        'UPDATE zone SET id_zone = ?, zone_name = ? WHERE id_zone = ?', 
+    [ zone_name  ,id_zone, req.params.id], 
+    (err, rows) =>
     { 
         if (!err){
             // user the connection
@@ -374,7 +342,7 @@ exports.edit = (req , res) =>{
 
 
 // delete zone 
-exports.delete = (req , res) => {
+exports.deleteZone = (req , res) => {
 // user connection
 connection.query('DELETE FROM zone WHERE id_zone = ?' , [req.params.id], (err, result)=>{
     if(!err){
