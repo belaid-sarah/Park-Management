@@ -1,18 +1,11 @@
-const express = require('express');
+const { Router } = require('express');
 const userController = require('../controller/userController');
 
-const router = express.Router();
+const router = Router();
 
-// Login route
-router.post('/login', userController.user);
-
-router.get('/profile', middleware.authenticateUser, (req, res) => {
-    // Access the user information from req.user
-    res.json({ user: req.user });
-});
-
-router.post('/register',userController.register)
-
-
-
-module.exports = manageruser;
+router.get('/signup', userController.signup_get);
+router.post('/signup', userController.signup_post);
+router.get('/login', userController.login_get);
+router.post('/login', userController.login_post);
+router.get('/logout', userController.logout_get);
+module.exports = router;

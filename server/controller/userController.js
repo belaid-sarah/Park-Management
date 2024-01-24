@@ -1,200 +1,117 @@
 const mysql = require('mysql');
-const bcrypt = require('bcryptjs'); 
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const middleware = require('./middleware');
-const { pool } = require('../../models/db'); // Adjust to your database setup
+const {pool} = require('../../models/db');
 
 
+// handle errors
+const handleErrors = (err) => {
+  console.log(err.message, err.code);
+  let errors = { email: '', password: '' };
 
-require('dotenv').config();
+  // incorrect email
+  if (err.message === 'incorrect email') {
+    errors.email = 'Email does not exist';
+  }
 
+  // incorrect password
+  if (err.message === 'incorrect password') {
+    errors.password = 'Incorrect password';
+  }
 
-//connection pool
+  // duplicate email error
+  if (err.code === 'ER_DUP_ENTRY') {
+    errors.email = 'That email is already registered';
+    return errors;
+  }
 
-
-// Connect to the databas
-pool.getConnection((err, connection) => {
-    if (err) {
-        console.error('Error connecting to MySQL: ' + err.stack)
-        return;
-    }
-    console.log('Connected to MySQL as id ' + connection.threadId)
-
-    connection.release();
-});
-
-// add feedback to my sql
-
-
-router.post('/feedback',  (req, res) => {
-    const { email, comment } = req.body;
-    pool.query('INSERT INTO feedback (email,comment) VALUES (? , ?)' , [email,comment], (error,results)=>{
-        if(error){
-            console.error(error);
-            return res.status(500).json({message:'Error creating feedback'});
-        }
-        res.status(201).json({message: 'Feedback created successfully'});
+  // validation errors
+  if (err.message.includes('user validation failed')) {
+    Object.values(err.errors).forEach(({ properties }) => {
+      errors[properties.path] = properties.message;
     });
-    });
-    // get feedback from MySQL
+  }
 
-    router.get('/feedback' , (req , res) => {
-        pool.query('SELECT * FROM feedback' , (error , results) =>{
-            if(error) {
-                console.error(error);
-                return res.status(500).json({message:"There was an error getting the data"});
-            }
-            res.json(results)
-        });
-    });
-    
-
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-//authentification 
-
-exports.register = async (req, res) => {
-    try {
-        console.log(req.body);
-        const firstname = req.body.firstname;
-        const lastname = req.body.lastname;
-        const email = req.body.email;
-        const password = req.body.password;
-        const passwordConfirm = req.body.passwordConfirm;
-        const number = req.body.number;
-
-        // check if the email is already in use
-        pool.query('SELECT email FROM users WHERE email = ?', [email], async (error, results) => {
-            if (error) {
-                console.log(error);
-                return res.status(500).json({ message: 'Internal Server Error' });
-            }
-
-            if (results.length > 0) {
-                return res.status(400).json({ message: 'That email is already in use' });
-            } else if (password !== passwordConfirm) {
-                return res.status(400).json({ message: 'Passwords do not match' });
-            }
-
-            try {
-                // hash the password
-                const hashedPassword = await bcrypt.hash(password, 8);
-                console.log(hashedPassword);
-
-                pool.query('INSERT INTO users SET ?', {
-                    firstname: firstname,
-                    lastname: lastname,
-                    email: email,
-                    password: hashedPassword,
-                    number: number,
-                }, (error, results) => {
-                    if (error) {
-                        console.log(error);
-                        return res.status(500).json({ message: 'Internal Server Error' });
-                    } else {
-                        return res.status(201).json({ message: 'User registered successfully' });
-                    }
-                });
-            } catch (error) {
-                console.log('An error occurred while trying to hash the password', error);
-                return res.status(500).json({ message: 'Internal Server Error' });
-            }
-        });
-    } catch (error) {
-        console.log('An error occurred while processing the request', error);
-        return res.status(500).json({ message: 'Internal Server Error' });
-    }
+  return errors;
 };
 
-    // login 
-    
+// create json web token
+const maxAge = 3 * 24 * 60 * 60;
+const createToken = (id) => {
+  return jwt.sign({ id }, 'louai secret', {
+    expiresIn: maxAge,
+  });
+};
 
+// controller actions
 
+// controller actions
+module.exports.signup_get = (req, res) => {
+    res.render('signup');
+  }
+  
+  module.exports.login_get = (req, res) => {
+    res.render('login');
+  }
 
+module.exports.signup_post = async (req, res) => {
+  const { name, prenom, email, tel, password } = req.body;
 
-// Controller function for user login
-const loginUser = async (req, res) => {
-    const { email, password } = req.body;
+  try {
+    // hash the password
+    const hashedPassword = await bcrypt.hash(password, 8);
 
-    // Check if email and password are provided
-    if (!email || !password) {
-        return res.status(400).json({ message: 'Email and password are required' });
-    }
-
-    try {
-        // Query the user with the given email from the database
-        const results = await query('SELECT * FROM users WHERE email = ?', [email]);
-
-        // Check if a user with the given email exists
-        if (results.length === 0) {
-            return res.status(401).json({ message: 'Invalid email or password' });
-        }
-
-        const user = results[0];
-
-        // Compare the provided password with the hashed password from the database
-        const passwordMatch = await bcrypt.compare(password, user.password);
-
-        if (passwordMatch) {
-            // Passwords match, login successful
-            return res.status(200).json({ message: 'Login successful', user: { id: user.id, email: user.email } });
+    // insert user into database
+    pool.query(
+      'INSERT INTO users (name, prenom, email, tel, password) VALUES (?, ?, ?, ?, ?)',
+      [name, prenom, email, tel, hashedPassword],
+      (error, results) => {
+        if (error) {
+          const errors = handleErrors(error);
+          res.status(400).json({ errors });
         } else {
-            // Passwords do not match
-            return res.status(401).json({ message: 'Invalid email or password' });
+          const token = createToken(results.insertId);
+          res.cookie('jwt', token, { httpOnly: true, maxAge: maxAge * 1000 });
+          res.status(201).json({ user: results.insertId });
         }
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Internal server error' });
+      }
+    );
+  } catch (err) {
+    const errors = handleErrors(err);
+    res.status(400).json({ errors });
+  }
+};
+
+module.exports.login_post = async (req, res) => {
+  const { email, password } = req.body;
+
+  // find user by email
+  pool.query('SELECT * FROM users WHERE email = ?', [email], async (error, results) => {
+    try {
+      if (error || results.length === 0) {
+        throw Error('incorrect email');
+      }
+
+      // compare the password
+      const user = results[0];
+      const passwordMatch = await bcrypt.compare(password, user.password);
+
+      if (!passwordMatch) {
+        throw Error('incorrect password');
+      }
+
+      // create a token
+      const token = createToken(user.id);
+      res.cookie('jwt', token, { httpOnly: true, maxAge: maxAge * 1000 });
+      res.status(200).json({ user: user.id });
+    } catch (err) {
+      const errors = handleErrors(err);
+      res.status(400).json({ errors });
     }
+  });
 };
 
-// Helper function to execute MySQL queries
-const query = (sql, values) => {
-    return new Promise((resolve, reject) => {
-        pool.query(sql, values, (error, results) => {
-            if (error) {
-                reject(error);
-            } else {
-                resolve(results);
-            }
-        });
-    });
+module.exports.logout_get = (req, res) => {
+  res.cookie('jwt', '', { maxAge: 1 });
+  res.redirect('/');
 };
-
-module.exports = {
-    loginUser,
-};
-
-    
-        
-        
-
-    
-    
-
-
-
-//module.exports = {
-  //loginUser,
-//};
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
